@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Patient Risk & Identity Resolution</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.15rem; margin-top: 2.5rem; border-bottom: 1px solid #8884; padding-bottom: 0.3rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  fieldset { border: 1px solid #8884; border-radius: 8px; padding: 1rem; }
+  legend { font-weight: 600; padding: 0 0.4rem; }
+  label { display: block; font-size: 0.85rem; margin-top: 0.5rem; }
+  input, select { width: 100%; padding: 0.4rem; margin-top: 0.2rem; box-sizing: border-box; }
+  button { margin-top: 1rem; padding: 0.5rem 1.2rem; cursor: pointer; }
+  .result { margin-top: 1rem; padding: 0.8rem; border-radius: 6px; background: #8882; white-space: pre-wrap; font-family: monospace; font-size: 0.85rem; }
+  table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid #8883; }
+  .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.75rem; }
+  .badge.match { background: #2e7d3222; color: #2e7d32; }
+  .badge.nomatch { background: #c6282822; color: #c62828; }
+  p.note { font-size: 0.85rem; opacity: 0.75; }
+</style>
+</head>
+<body>
+
+<h1>Patient Risk &amp; Identity Resolution</h1>
+<p class="note">Synthetic-data demo (Synthea-generated) — patient matching (deterministic + probabilistic linkage) and 30-day readmission risk prediction, backed by a warehouse of 1.2M+ synthetic clinical events.</p>
+
+<h2>Patient Matching</h2>
+<p class="note">Enter two records as they might appear in two different hospital systems. The probabilistic matcher (logistic regression over Jaro-Winkler similarity features) scores how likely they're the same person.</p>
+<div class="grid">
+  <fieldset>
+    <legend>Record A</legend>
+    <label>First name <input id="a_first" value="Robert"></label>
+    <label>Last name <input id="a_last" value="Nguyen"></label>
+    <label>DOB <input id="a_dob" value="1985-03-14"></label>
+    <label>Zip <input id="a_zip" value="84097"></label>
+    <label>SSN (optional) <input id="a_ssn" value="999-11-2233"></label>
+  </fieldset>
+  <fieldset>
+    <legend>Record B</legend>
+    <label>First name <input id="b_first" value="Robby"></label>
+    <label>Last name <input id="b_last" value="Nguyen"></label>
+    <label>DOB <input id="b_dob" value="1985-03-14"></label>
+    <label>Zip <input id="b_zip" value="84097"></label>
+    <label>SSN (optional) <input id="b_ssn" value=""></label>
+  </fieldset>
+</div>
+<button onclick="runMatch()">Score match</button>
+<div id="match_result" class="result" style="display:none"></div>
+
+<h2>30-Day Readmission Risk</h2>
+<p class="note">Logistic regression, chosen over a marginally higher-scoring neural net for interpretability. Leave fields blank to let the model impute — it was trained on real missingness patterns (e.g. only ~48% of encounters have an HbA1c reading).</p>
+<div class="grid">
+  <fieldset>
+    <legend>Utilization history</legend>
+    <label>Prior encounters <input id="prior_encounter_count" type="number" value="12"></label>
+    <label>Prior inpatient stays <input id="prior_inpatient_count" type="number" value="3"></label>
+    <label>Prior conditions <input id="prior_condition_count" type="number" value="8"></label>
+    <label>Prior procedures <input id="prior_procedure_count" type="number" value="20"></label>
+    <label>Prior medications <input id="prior_medication_count" type="number" value="15"></label>
+    <label>Chronic condition count <input id="chronic_condition_count" type="number" value="1"></label>
+  </fieldset>
+  <fieldset>
+    <legend>Vitals &amp; demographics</legend>
+    <label>Age at encounter <input id="age_at_encounter" type="number" value="67"></label>
+    <label>BMI <input id="bmi" type="number" value="31.2"></label>
+    <label>Systolic BP <input id="systolic_bp" type="number" value="142"></label>
+    <label>Gender
+      <select id="gender"><option>M</option><option>F</option></select>
+    </label>
+    <label>Race <input id="race" value="white"></label>
+    <label>Ethnicity <input id="ethnicity" value="nonhispanic"></label>
+  </fieldset>
+</div>
+<button onclick="runRisk()">Predict risk</button>
+<div id="risk_result" class="result" style="display:none"></div>
+
+<h2>Monitoring</h2>
+<p class="note">Every prediction the service makes is logged. This is what a real ops dashboard would poll.</p>
+<button onclick="loadMonitoring()">Refresh</button>
+<div id="monitoring_result"></div>
+
+<script>
+async function runMatch() {
+  const body = {
+    record_a: { first: a_first.value, last: a_last.value, dob: a_dob.value, zip: a_zip.value, ssn: a_ssn.value || null },
+    record_b: { first: b_first.value, last: b_last.value, dob: b_dob.value, zip: b_zip.value, ssn: b_ssn.value || null },
+  };
+  const res = await fetch("/api/match", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) });
+  const data = await res.json();
+  const el = document.getElementById("match_result");
+  el.style.display = "block";
+  const badge = data.is_match ? '<span class="badge match">MATCH</span>' : '<span class="badge nomatch">no match</span>';
+  el.innerHTML = `score: ${data.score}  ${badge}\n\nfeatures: ${JSON.stringify(data.features, null, 2)}`;
+}
+
+async function runRisk() {
+  const body = {
+    prior_encounter_count: +prior_encounter_count.value,
+    prior_inpatient_count: +prior_inpatient_count.value,
+    prior_condition_count: +prior_condition_count.value,
+    prior_procedure_count: +prior_procedure_count.value,
+    prior_medication_count: +prior_medication_count.value,
+    chronic_condition_count: +chronic_condition_count.value,
+    age_at_encounter: +age_at_encounter.value,
+    bmi: +bmi.value,
+    systolic_bp: +systolic_bp.value,
+    gender: gender.value,
+    race: race.value,
+    ethnicity: ethnicity.value,
+  };
+  const res = await fetch("/api/predict-risk", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) });
+  const data = await res.json();
+  const el = document.getElementById("risk_result");
+  el.style.display = "block";
+  el.textContent = `30-day readmission risk: ${(data.readmission_risk_30d * 100).toFixed(1)}%`;
+}
+
+async function loadMonitoring() {
+  const res = await fetch("/api/monitoring");
+  const data = await res.json();
+  let html = "<table><tr><th>kind</th><th>count</th><th>avg score</th><th>min</th><th>max</th></tr>";
+  for (const [kind, s] of Object.entries(data.summary)) {
+    html += `<tr><td>${kind}</td><td>${s.n}</td><td>${s.avg_score.toFixed(3)}</td><td>${s.min_score.toFixed(3)}</td><td>${s.max_score.toFixed(3)}</td></tr>`;
+  }
+  html += "</table><h3 style='font-size:0.9rem'>Recent predictions</h3><table><tr><th>kind</th><th>input</th><th>score</th><th>when</th></tr>";
+  for (const r of data.recent) {
+    html += `<tr><td>${r.kind}</td><td>${r.input_summary}</td><td>${r.score.toFixed(3)}</td><td>${r.created_at}</td></tr>`;
+  }
+  html += "</table>";
+  document.getElementById("monitoring_result").innerHTML = html;
+}
+loadMonitoring();
+</script>
+
+</body>
+</html>

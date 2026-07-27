@@ -1,0 +1,10 @@
+# no tensorflow here on purpose — the API just loads a saved sklearn
+# pipeline, training.py only imports tf inside train_keras_mlp()
+pandas
+sqlalchemy
+python-dotenv
+jellyfish
+scikit-learn
+fastapi
+uvicorn[standard]
+mangum
