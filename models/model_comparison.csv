@@ -1,0 +1,5 @@
+model,precision,recall,f1,pr_auc,roc_auc
+neural_network_mlp,0.237,0.779,0.364,0.254,0.788
+random_forest,0.214,0.039,0.066,0.244,0.777
+logistic_regression,0.216,0.649,0.325,0.239,0.743
+gradient_boosted_trees,0.115,0.078,0.093,0.214,0.758
