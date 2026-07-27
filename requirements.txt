@@ -1,0 +1,10 @@
+pandas
+sqlalchemy
+python-dotenv
+jellyfish
+scikit-learn
+tensorflow
+psycopg2-binary
+sqlalchemy-redshift
+fastapi
+uvicorn[standard]

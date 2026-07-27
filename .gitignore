@@ -1,0 +1,27 @@
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Synthea: regeneratable from `java -jar synthea-with-dependencies.jar -c synthea.properties -p 3000 Utah`
+synthea-with-dependencies.jar
+synthea_generation.log
+output/
+
+# Warehouse + regeneratable intermediate data
+warehouse.db
+monitoring.db
+matching/system_b_patients.csv
+matching/ground_truth.csv
+models/training_data.csv
+
+# Large/non-production model artifacts (regeneratable via `python -m models.train`).
+# logistic_regression.joblib (production) and matching/probabilistic_model.joblib
+# are small and kept in the repo so the API can run without retraining first.
+models/random_forest.joblib
+models/gradient_boosted_trees.joblib
+models/neural_network_mlp.keras
+models/neural_network_mlp_preprocessor.joblib
+
+.env
+*.log
