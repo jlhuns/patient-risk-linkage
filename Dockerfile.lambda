@@ -1,0 +1,13 @@
+# Lambda image — needs AWS's own base since Lambda invokes the handler
+# via its Runtime API instead of running a persistent server like Dockerfile does.
+FROM public.ecr.aws/lambda/python:3.12
+
+COPY requirements-prod.txt .
+RUN pip install --no-cache-dir -r requirements-prod.txt
+
+COPY app/ ${LAMBDA_TASK_ROOT}/app/
+COPY matching/__init__.py matching/deterministic.py matching/probabilistic.py matching/probabilistic_model.joblib ${LAMBDA_TASK_ROOT}/matching/
+COPY models/__init__.py models/features.py models/train.py models/logistic_regression.joblib ${LAMBDA_TASK_ROOT}/models/
+COPY db/ ${LAMBDA_TASK_ROOT}/db/
+
+CMD ["app.lambda_handler.handler"]
